@@ -1,0 +1,54 @@
+version: '3'
+
+volumes:
+  postgres_data:
+      driver: local
+
+services:
+  postgres:
+    image: postgres:alpine
+    container_name: vault_postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/vault.sql:/docker-entrypoint-initdb.d/vault.sql
+    environment:
+      POSTGRES_DB: vault
+      POSTGRES_USER: vault
+      POSTGRES_PASSWORD: passw0rD
+  
+  vault:
+    image: vault:latest
+    container_name: vault_server
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    depends_on:
+      - postgres
+    command:
+      - "server"
+    environment:
+      VAULT_ADDR: http://127.0.0.1:8200
+      VAULT_LOCAL_CONFIG: >-
+        {
+            "api_addr": "http://127.0.0.1:8200",
+            "ui": true,
+            "disable_clustering": true,
+            "log_level": "info",
+            "storage": {
+              "postgresql": {
+                "connection_url": "postgres://vault:passw0rD@postgres:5432/vault?sslmode=disable",
+                "table": "vault_kv_store",
+                "ha_enabled": true,
+                "ha_table": "vault_ha_locks"
+              }
+            },
+            "default_lease_ttl": "168h",
+            "listener": {
+                "tcp": {
+                    "address": "0.0.0.0:8200",
+                    "tls_disable": "1"
+                }
+            },
+            "max_lease_ttl": "720h"
+        }
